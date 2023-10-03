@@ -45,6 +45,9 @@ and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR0132
         slicer.app.connect("startupCompleted()", registerSampleData)
 
 
+
+
+
 #
 # Register sample data sets in Sample Data module
 #
@@ -168,6 +171,143 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
+
+
+        trioMonitorFourUpView = """
+        <viewports>
+
+        <layout type="vertical">
+        <item>
+        <layout type="horizontal">
+            <item>
+            <view class="vtkMRMLSliceNode" singletontag="Red">
+            <property name="orientation" action="default">Axial</property>
+            <property name="viewlabel" action="default">R</property>
+            <property name="viewcolor" action="default">#F34A33</property>
+            </view>
+            </item>
+            <item>
+            <view class="vtkMRMLViewNode" singletontag="1">
+            <property name="viewlabel" action="default">1</property>
+            </view>
+            </item>
+        </layout>
+        </item>
+        <item>
+        <layout type="horizontal">
+            <item>
+            <view class="vtkMRMLSliceNode" singletontag="Green">
+            <property name="orientation" action="default">Coronal</property>
+            <property name="viewlabel" action="default">G</property>
+            <property name="viewcolor" action="default">#6EB04B</property>
+            </view>
+            </item>
+            <item>
+            <view class="vtkMRMLSliceNode" singletontag="Yellow">
+            <property name="orientation" action="default">Sagittal</property>
+            <property name="viewlabel" action="default">Y</property>
+            <property name="viewcolor" action="default">#EDD54C</property>
+            </view>
+            </item>
+        </layout>
+        </item>
+        </layout>
+
+        <layout name="views+" type="vertical" label="Views+" dockable="true" dockPosition="floating">
+        <item>
+        <layout type="horizontal">
+            <item>
+            <view class="vtkMRMLSliceNode" singletontag="Red+">
+            <property name="orientation" action="default">Axial</property>
+            <property name="viewlabel" action="default">R+</property>
+            <property name="viewcolor" action="default">#f9a99f</property>
+            <property name="viewgroup" action="default">1</property>
+            </view>
+            </item>
+            <item>
+            <view class="vtkMRMLViewNode" singletontag="1+" type="secondary">
+            <property name="viewlabel" action="default">1+</property>
+            <property name="viewgroup" action="default">1</property>
+            </view>
+            </item>
+        </layout>
+        </item>
+        <item>
+        <layout type="horizontal">
+            <item>
+            <view class="vtkMRMLSliceNode" singletontag="Green+">
+            <property name="orientation" action="default">Coronal</property>
+            <property name="viewlabel" action="default">G+</property>
+            <property name="viewcolor" action="default">#c6e0b8</property>
+            <property name="viewgroup" action="default">1</property>
+            </view>
+            </item>
+            <item>
+            <view class="vtkMRMLSliceNode" singletontag="Yellow+">
+            <property name="orientation" action="default">Sagittal</property>
+            <property name="viewlabel" action="default">Y+</property>
+            <property name="viewcolor" action="default">#f6e9a2</property>
+            <property name="viewgroup" action="default">1</property>
+            </view>
+            </item>
+        </layout>
+        </item>
+        </layout>
+
+        <layout name="views++" type="vertical" label="Views++" dockable="true" dockPosition="floating">
+        <item>
+        <layout type="horizontal">
+            <item>
+            <view class="vtkMRMLSliceNode" singletontag="Red++">
+            <property name="orientation" action="default">Axial</property>
+            <property name="viewlabel" action="default">R++</property>
+            <property name="viewcolor" action="default">#f9a99f</property>
+            <property name="viewgroup" action="default">1</property>
+            </view>
+            </item>
+            <item>
+            <view class="vtkMRMLViewNode" singletontag="1++" type="secondary">
+            <property name="viewlabel" action="default">1++</property>
+            <property name="viewgroup" action="default">1</property>
+            </view>
+            </item>
+        </layout>
+        </item>
+        <item>
+        <layout type="horizontal">
+            <item>
+            <view class="vtkMRMLSliceNode" singletontag="Green++">
+            <property name="orientation" action="default">Coronal</property>
+            <property name="viewlabel" action="default">G++</property>
+            <property name="viewcolor" action="default">#c6e0b8</property>
+            <property name="viewgroup" action="default">1</property>
+            </view>
+            </item>
+            <item>
+            <view class="vtkMRMLSliceNode" singletontag="Yellow++">
+            <property name="orientation" action="default">Sagittal</property>
+            <property name="viewlabel" action="default">Y++</property>
+            <property name="viewcolor" action="default">#f6e9a2</property>
+            <property name="viewgroup" action="default">1</property>
+            </view>
+            </item>
+        </layout>
+        </item>
+        </layout>
+
+        </viewports>
+        """
+
+        # Built-in layout IDs are all below 100, so you can choose any large random number
+        # for your custom layout ID.
+        customLayoutId=501
+
+        layoutManager = slicer.app.layoutManager()
+        layoutManager.layoutLogic().GetLayoutNode().AddLayoutDescription(customLayoutId,trioMonitorFourUpView )
+
+        # Switch to the new custom layout
+        layoutManager.setLayout(customLayoutId)
+
 
     def cleanup(self) -> None:
         """
