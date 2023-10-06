@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 from typing import Annotated, Optional
 
 import vtk
@@ -90,8 +91,26 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         self.startExperimentButton.setEnabled(False)  # Initially disabled
         setupGroupBoxLayout.addWidget(self.startExperimentButton)
 
+        # Create navigation buttons
+        navigationButtonLayout = qt.QHBoxLayout()
+
+        self.prevButton = qt.QPushButton("Previous")
+        self.prevButton.setEnabled(False)
+        self.nextButton = qt.QPushButton("Next")
+        self.nextButton.setEnabled(False)
+
+        navigationButtonLayout.addWidget(self.prevButton)
+        navigationButtonLayout.addWidget(self.nextButton)
+
+        # Connections for the navigation buttons
+        self.prevButton.clicked.connect(self.onPrevButton)
+        self.nextButton.clicked.connect(self.onNextButton)
+
+
         setupGroupBox.setLayout(setupGroupBoxLayout)
         self.layout.addWidget(setupGroupBox)
+        self.layout.addItem(qt.QSpacerItem(0, 0, qt.QSizePolicy.Minimum, qt.QSizePolicy.Expanding))
+        self.layout.addLayout(navigationButtonLayout)
         self.layout.addItem(qt.QSpacerItem(0, 0, qt.QSizePolicy.Minimum, qt.QSizePolicy.Expanding))
 
         # Connections (qt.Qt)
@@ -145,7 +164,12 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         """
         Called upon start experiment button is pressed
         """
-        pass
+        success = self.logic.startExperiment(self.folderPathLineEditVolumes.text, self.folderPathLineEditSegmentations.text)
+        if success:
+
+            # Update button states
+            self.prevButton.setEnabled(False)
+            self.nextButton.setEnabled(True)
 
     def selectFolder(self, targetLineEdit) -> None:
         selectedFolder = qt.QFileDialog.getExistingDirectory(None, 'Select Folder', './')
@@ -158,62 +182,31 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         else:
             self.startExperimentButton.setEnabled(False)
 
-    # def initializeParameterNode(self) -> None:
-    #     """
-    #     Ensure parameter node exists and observed.
-    #     """
-    #     # Parameter node stores all user choices in parameter values, node selections, etc.
-    #     # so that when the scene is saved and reloaded, these settings are restored.
+    def onPrevButton(self) -> None:
+        """
+        Called upon Previous button is pressed.
+        """
+        self.logic.previousDataset()
 
-    #     self.setParameterNode(self.logic.getParameterNode())
+        # Check if the currentDatasetIndex is at the start to disable the "Previous" button
+        if self.logic.currentDatasetIndex == 0:
+            self.prevButton.setEnabled(False)
 
-    #     # Select default input nodes if nothing is selected yet to save a few clicks for the user
-    #     if not self._parameterNode.inputVolume:
-    #         firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
-    #         if firstVolumeNode:
-    #             self._parameterNode.inputVolume = firstVolumeNode
+        # Ensure the "Next" button is enabled (in case it was disabled after reaching the end)
+        self.nextButton.setEnabled(True)
 
-    # def setParameterNode(self, inputParameterNode: Optional[SlicerLiverSegmentsParameterNode]) -> None:
-    #     """
-    #     Set and observe parameter node.
-    #     Observation is needed because when the parameter node is changed then the GUI must be updated immediately.
-    #     """
+    def onNextButton(self) -> None:
+        """
+        Called upon Next button is pressed.
+        """
+        self.logic.nextDataset()
 
-    #     if self._parameterNode:
-    #         self._parameterNode.disconnectGui(self._parameterNodeGuiTag)
-    #         self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanApply)
-    #     self._parameterNode = inputParameterNode
-    #     if self._parameterNode:
-    #         # Note: in the .ui file, a Qt dynamic property called "SlicerParameterName" is set on each
-    #         # ui element that needs connection.
-    #         self._parameterNodeGuiTag = self._parameterNode.connectGui(self.ui)
-    #         self.addObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanApply)
-    #         self._checkCanApply()
+        # Check if the currentDatasetIndex is at the end to disable the "Next" button
+        if self.logic.currentDatasetIndex == len(self.logic.loadingOrder) - 1:
+            self.nextButton.setEnabled(False)
 
-    # def _checkCanApply(self, caller=None, event=None) -> None:
-    #     if self._parameterNode and self._parameterNode.inputVolume and self._parameterNode.thresholdedVolume:
-    #         self.ui.applyButton.toolTip = "Compute output volume"
-    #         self.ui.applyButton.enabled = True
-    #     else:
-    #         self.ui.applyButton.toolTip = "Select input and output volume nodes"
-    #         self.ui.applyButton.enabled = False
-
-    # def onApplyButton(self) -> None:
-    #     """
-    #     Run processing when user clicks "Apply" button.
-    #     """
-    #     with slicer.util.tryWithErrorDisplay("Failed to compute results.", waitCursor=True):
-
-    #         # Compute output
-    #         self.logic.process(self.ui.inputSelector.currentNode(), self.ui.outputSelector.currentNode(),
-    #                            self.ui.imageThresholdSliderWidget.value, self.ui.invertOutputCheckBox.checked)
-
-    #         # Compute inverted output (if needed)
-    #         if self.ui.invertedOutputSelector.currentNode():
-    #             # If additional output volume is selected then result with inverted threshold is written there
-    #             self.logic.process(self.ui.inputSelector.currentNode(), self.ui.invertedOutputSelector.currentNode(),
-    #                                self.ui.imageThresholdSliderWidget.value, not self.ui.invertOutputCheckBox.checked, showResult=False)
-
+        # Ensure the "Previous" button is enabled (in case it was disabled after reaching the start)
+        self.prevButton.setEnabled(True)
 
 #
 # SlicerLiverSegmentsLogic
@@ -229,202 +222,165 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
     https://github.com/Slicer/Slicer/blob/main/Base/Python/slicer/ScriptedLoadableModule.py
     """
 
+    # Define a tuple of valid file extensions
+    VALID_EXTENSIONS = (".nii", ".dcm", ".nrrd")
+    RANDOM_SEED= 10
+
     def __init__(self) -> None:
         """
         Called when the logic class is instantiated. Can be used for initializing member variables.
         """
         ScriptedLoadableModuleLogic.__init__(self)
+        self.currentDatasetIndex = -1  # Initializing with -1 to denote no dataset loaded
+        self.loadingOrder = []
+        self.volumeFiles = []
+        self.segmentationFiles = []
 
-    def createAndSetLayout(self) -> None:
-
-        trioMonitorFourUpView = """
-        <viewports>
-
-        <layout type="vertical">
-        <item>
-        <layout type="horizontal">
-            <item>
-            <view class="vtkMRMLSliceNode" singletontag="Red">
-            <property name="orientation" action="default">Axial</property>
-            <property name="viewlabel" action="default">R</property>
-            <property name="viewcolor" action="default">#F34A33</property>
-            </view>
-            </item>
-            <item>
-            <view class="vtkMRMLViewNode" singletontag="1">
-            <property name="viewlabel" action="default">1</property>
-            </view>
-            </item>
-        </layout>
-        </item>
-        <item>
-        <layout type="horizontal">
-            <item>
-            <view class="vtkMRMLSliceNode" singletontag="Green">
-            <property name="orientation" action="default">Coronal</property>
-            <property name="viewlabel" action="default">G</property>
-            <property name="viewcolor" action="default">#6EB04B</property>
-            </view>
-            </item>
-            <item>
-            <view class="vtkMRMLSliceNode" singletontag="Yellow">
-            <property name="orientation" action="default">Sagittal</property>
-            <property name="viewlabel" action="default">Y</property>
-            <property name="viewcolor" action="default">#EDD54C</property>
-            </view>
-            </item>
-        </layout>
-        </item>
-        </layout>
-
-        <layout name="views+" type="vertical" label="Views+" dockable="true" dockPosition="floating">
-        <item>
-        <layout type="horizontal">
-            <item>
-            <view class="vtkMRMLSliceNode" singletontag="Red+">
-            <property name="orientation" action="default">Axial</property>
-            <property name="viewlabel" action="default">R+</property>
-            <property name="viewcolor" action="default">#f9a99f</property>
-            <property name="viewgroup" action="default">1</property>
-            </view>
-            </item>
-            <item>
-            <view class="vtkMRMLViewNode" singletontag="1+" type="secondary">
-            <property name="viewlabel" action="default">1+</property>
-            <property name="viewgroup" action="default">1</property>
-            </view>
-            </item>
-        </layout>
-        </item>
-        <item>
-        <layout type="horizontal">
-            <item>
-            <view class="vtkMRMLSliceNode" singletontag="Green+">
-            <property name="orientation" action="default">Coronal</property>
-            <property name="viewlabel" action="default">G+</property>
-            <property name="viewcolor" action="default">#c6e0b8</property>
-            <property name="viewgroup" action="default">1</property>
-            </view>
-            </item>
-            <item>
-            <view class="vtkMRMLSliceNode" singletontag="Yellow+">
-            <property name="orientation" action="default">Sagittal</property>
-            <property name="viewlabel" action="default">Y+</property>
-            <property name="viewcolor" action="default">#f6e9a2</property>
-            <property name="viewgroup" action="default">1</property>
-            </view>
-            </item>
-        </layout>
-        </item>
-        </layout>
-
-        <layout name="views++" type="vertical" label="Views++" dockable="true" dockPosition="floating">
-        <item>
-        <layout type="horizontal">
-            <item>
-            <view class="vtkMRMLSliceNode" singletontag="Red++">
-            <property name="orientation" action="default">Axial</property>
-            <property name="viewlabel" action="default">R++</property>
-            <property name="viewcolor" action="default">#f9a99f</property>
-            <property name="viewgroup" action="default">1</property>
-            </view>
-            </item>
-            <item>
-            <view class="vtkMRMLViewNode" singletontag="1++" type="secondary">
-            <property name="viewlabel" action="default">1++</property>
-            <property name="viewgroup" action="default">1</property>
-            </view>
-            </item>
-        </layout>
-        </item>
-        <item>
-        <layout type="horizontal">
-            <item>
-            <view class="vtkMRMLSliceNode" singletontag="Green++">
-            <property name="orientation" action="default">Coronal</property>
-            <property name="viewlabel" action="default">G++</property>
-            <property name="viewcolor" action="default">#c6e0b8</property>
-            <property name="viewgroup" action="default">1</property>
-            </view>
-            </item>
-            <item>
-            <view class="vtkMRMLSliceNode" singletontag="Yellow++">
-            <property name="orientation" action="default">Sagittal</property>
-            <property name="viewlabel" action="default">Y++</property>
-            <property name="viewcolor" action="default">#f6e9a2</property>
-            <property name="viewgroup" action="default">1</property>
-            </view>
-            </item>
-        </layout>
-        </item>
-        </layout>
-
-        </viewports>
+    def resetExperiment(self) -> None:
         """
-
-        # Built-in layout IDs are all below 100, so you can choose any large random number
-        # for your custom layout ID.
-        customLayoutId=501
-
-        layoutManager = slicer.app.layoutManager()
-        layoutManager.layoutLogic().GetLayoutNode().AddLayoutDescription(customLayoutId,trioMonitorFourUpView )
-
-        # Switch to the new custom layout
-        layoutManager.setLayout(customLayoutId)
-
-
-        # This is a snippet of code to access the different 3D Views
-        # --extracted from script repository 3D Slicer
-        layoutManager = slicer.app.layoutManager()
-        for threeDViewIndex in range(layoutManager.threeDViewCount) :
-            view = layoutManager.threeDWidget(threeDViewIndex).threeDView()
-            threeDViewNode = view.mrmlViewNode()
-            cameraNode = slicer.modules.cameras.logic().GetViewActiveCameraNode(threeDViewNode)
-            print("View node for 3D widget " + str(threeDViewIndex))
-            print("  Name: " + threeDViewNode .GetName())
-            print("  ID: " + threeDViewNode .GetID())
-            print("  Camera ID: " + cameraNode.GetID())
-
+        Resets the experiment. The current dataset index is reset to the beginning.
+        """
+        self.currentDatasetIndex = 0  # Start from the first dataset
 
     def getParameterNode(self):
         return SlicerLiverSegmentsParameterNode(super().getParameterNode())
 
-    def process(self,
-                inputVolume: vtkMRMLScalarVolumeNode,
-                outputVolume: vtkMRMLScalarVolumeNode,
-                imageThreshold: float,
-                invert: bool = False,
-                showResult: bool = True) -> None:
+    def getFilesInDirectory(self, dirPath: str) -> list:
         """
-        Run the processing algorithm.
-        Can be used without GUI widget.
-        :param inputVolume: volume to be thresholded
-        :param outputVolume: thresholding result
-        :param imageThreshold: values above/below this threshold will be set to 0
-        :param invert: if True then values above the threshold will be set to 0, otherwise values below are set to 0
-        :param showResult: show output volume in slice viewers
+        Returns a list of all files in the given directory filtered by valid extensions.
+        """
+        if not os.path.exists(dirPath):
+            print(f"Directory {dirPath} does not exist!")
+            return []
+
+        # List all files in the directory, filter out any subdirectories,
+        # filter by extension, and then sort them
+        return sorted([f for f in os.listdir(dirPath)
+                       if os.path.isfile(os.path.join(dirPath, f))
+                       and f.endswith(self.VALID_EXTENSIONS)])
+
+        # List all files in the directory, filter out any subdirectories, and filter by extension
+        return [f for f in os.listdir(dirPath) if os.path.isfile(os.path.join(dirPath, f)) and f.endswith(self.VALID_EXTENSIONS)]
+
+    def getVolumeFiles(self, volumesDirPath: str) -> list:
+        """
+        Returns a list of all files in the volumes directory.
+        """
+        return self.getFilesInDirectory(volumesDirPath)
+
+    def getSegmentationFiles(self, segmentationsDirPath: str) -> list:
+        """
+        Returns a list of all files in the segmentations directory.
+        """
+        return self.getFilesInDirectory(segmentationsDirPath)
+
+    def generateRandomLoadingOrder(self, numberOfFiles: int, seed: int = None) -> list:
+        """
+        Generate a vector of random numbers representing the loading order for files.
+
+        :param numberOfFiles: Number of files for which to generate the loading order.
+        :param seed: Optional seed for random number generation.
+        """
+        if seed is not None:
+            random.seed(seed)
+
+        return random.sample(range(numberOfFiles), numberOfFiles)
+
+    def loadDataset(self, index: int) -> None:
+        """
+        Load a dataset (volume and segmentation) into the scene based on the given index.
+        """
+        if index < 0 or index >= len(self.loadingOrder):
+            print(f"Index {index} is out of range!")
+            return
+
+        # Load the volume
+        volumePath = os.path.join(self.volumesDirPath, self.volumeFiles[self.loadingOrder[index]])
+        if not slicer.util.loadVolume(volumePath):
+            print(f"Failed to load volume from {volumePath}")
+
+        # Load the segmentation
+        segmentationPath = os.path.join(self.segmentationsDirPath, self.segmentationFiles[self.loadingOrder[index]])
+        segmentationNode = slicer.util.loadSegmentation(segmentationPath)
+        if not segmentationNode:
+            print(f"Failed to load segmentation from {segmentationPath}")
+        else:
+            segmentation = segmentationNode.GetSegmentation()
+
+            # Convert the entire segmentation to have a closed surface representation
+            segmentationNode.CreateClosedSurfaceRepresentation()
+
+    def startExperiment(self,volumesDirPath, segmentationsDirPath) -> bool:
+        """
+        Called upon start experiment button is pressed
         """
 
-        if not inputVolume or not outputVolume:
-            raise ValueError("Input or output volume is invalid")
+        # Store the directory paths as attributes
+        self.volumesDirPath = volumesDirPath
+        self.segmentationsDirPath = segmentationsDirPath
 
-        import time
-        startTime = time.time()
-        logging.info('Processing started')
 
-        # Compute the thresholded output volume using the "Threshold Scalar Volume" CLI module
-        cliParams = {
-            'InputVolume': inputVolume.GetID(),
-            'OutputVolume': outputVolume.GetID(),
-            'ThresholdValue': imageThreshold,
-            'ThresholdType': 'Above' if invert else 'Below'
-        }
-        cliNode = slicer.cli.run(slicer.modules.thresholdscalarvolume, None, cliParams, wait_for_completion=True, update_display=showResult)
-        # We don't need the CLI module node anymore, remove it to not clutter the scene with it
-        slicer.mrmlScene.RemoveNode(cliNode)
+        # 1. Get the list of files in volumes
+        volumeFiles = self.getVolumeFiles(volumesDirPath)
 
-        stopTime = time.time()
-        logging.info(f'Processing completed in {stopTime-startTime:.2f} seconds')
+        # 2. Get the list of files in segmentations
+        segmentationFiles = self.getSegmentationFiles(segmentationsDirPath)
+
+        if len(volumeFiles) != len(segmentationFiles):
+            print("Volumes and segmentations directories do not have the same number of files!")
+            return False
+
+        # Keep track of the files and order for future use
+        self.volumeFiles = volumeFiles
+        self.segmentationFiles = segmentationFiles
+        self.loadingOrder = self.generateRandomLoadingOrder(len(volumeFiles), self.RANDOM_SEED)
+
+        self.resetExperiment()
+
+        print("Volume Files:", volumeFiles)
+        print("Segmentation Files:", segmentationFiles)
+        print("Loading Order:", self.loadingOrder)
+
+        # Clear the scene
+        slicer.mrmlScene.Clear()
+
+        # Load the first dataset
+        self.loadDataset(self.currentDatasetIndex)
+
+        return True
+
+    def nextDataset(self) -> None:
+        """
+        Load the next dataset in the sequence into the scene.
+        """
+        self.currentDatasetIndex += 1
+        if self.currentDatasetIndex >= len(self.loadingOrder):
+            # Handle end of dataset list (maybe loop back to start or just stay on the last dataset)
+            self.currentDatasetIndex = len(self.loadingOrder) - 1
+            return
+
+        # Clear the scene
+        slicer.mrmlScene.Clear()
+
+        # Load the next dataset
+        self.loadDataset(self.currentDatasetIndex)
+
+    def previousDataset(self) -> None:
+        """
+        Load the previous dataset in the sequence into the scene.
+        """
+        self.currentDatasetIndex -= 1
+        if self.currentDatasetIndex < 0:
+            # Handle start of dataset list (maybe loop back to end or just stay on the first dataset)
+            self.currentDatasetIndex = 0
+            return
+
+        # Clear the scene
+        slicer.mrmlScene.Clear()
+
+        # Load the previous dataset
+        self.loadDataset(self.currentDatasetIndex)
+
 
 
 #
