@@ -223,7 +223,7 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
     """
 
     # Define a tuple of valid file extensions
-    VALID_EXTENSIONS = (".nii", ".dcm", ".nrrd")
+    VALID_EXTENSIONS = ("nii.gz", ".nii", ".dcm", ".nrrd", ".seg.nrrd" )
     RANDOM_SEED= 10
 
     def __init__(self) -> None:
