@@ -6,11 +6,11 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>748</width>
+    <width>798</width>
     <height>1009</height>
    </rect>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_2">
+  <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="ctkCollapsibleGroupBox" name="directoriesGroupBox">
      <property name="title">
@@ -269,7 +269,7 @@
       <bool>false</bool>
      </property>
      <property name="title">
-      <string>Q1:  Rate the fidelity of the method to the Couinaud segments division</string>
+      <string>Q1:  How well does this division adheres to the Couinaud model?</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_7">
       <item>
@@ -288,8 +288,14 @@ Reliable</string>
         <property name="maximum">
          <number>5</number>
         </property>
+        <property name="tracking">
+         <bool>true</bool>
+        </property>
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="invertedAppearance">
+         <bool>false</bool>
         </property>
         <property name="tickPosition">
          <enum>QSlider::TicksBelow</enum>
@@ -319,7 +325,7 @@ Reliable</string>
       <bool>false</bool>
      </property>
      <property name="title">
-      <string>Q2:  Rate how the segments division adheres to the patient's anatomy</string>
+      <string>Q2:  Rate how this segments division adheres specifically to the patient's anatomy</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_8">
       <item>
@@ -364,12 +370,12 @@ Adherence</string>
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleGroupBox" name="q3groupBox">
+    <widget class="ctkCollapsibleGroupBox" name="q3GroupBox">
      <property name="enabled">
       <bool>false</bool>
      </property>
      <property name="title">
-      <string>Q3: How effectively can you assess each segment's perfusion volume?</string>
+      <string>Q3: How effectively can you assess each segment's perfusion region?</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_9">
       <item>
@@ -419,7 +425,7 @@ Effectively</string>
       <bool>false</bool>
      </property>
      <property name="title">
-      <string>Q4: How relevant is this segments division towards planning a surgical intervention?</string>
+      <string>Q4: How accurate is this segments division towards planning a surgical intervention?</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_10">
       <item>
@@ -462,6 +468,61 @@ Effectively</string>
       </item>
      </layout>
     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_12">
+     <item>
+      <widget class="QPushButton" name="previousPushButton">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>&lt; Previous</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="saveAndNextPushButton">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Save and Next &gt;</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_13">
+     <item>
+      <widget class="QLabel" name="progressLabel">
+       <property name="text">
+        <string>Progress:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QProgressBar" name="progressBar">
+       <property name="value">
+        <number>0</number>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>
