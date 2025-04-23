@@ -12,7 +12,7 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
    <item>
-    <widget class="ctkCollapsibleGroupBox" name="CollapsibleGroupBox">
+    <widget class="ctkCollapsibleGroupBox" name="directoriesGroupBox">
      <property name="title">
       <string>Experiment directories</string>
      </property>
@@ -158,7 +158,7 @@
     </widget>
    </item>
    <item>
-    <widget class="QGroupBox" name="groupBox">
+    <widget class="QGroupBox" name="parametersGroupBox">
      <property name="title">
       <string>Experiment Parameters</string>
      </property>
@@ -264,7 +264,7 @@
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleGroupBox" name="Q1GroupBox">
+    <widget class="ctkCollapsibleGroupBox" name="q1GroupBox">
      <property name="enabled">
       <bool>false</bool>
      </property>
@@ -297,6 +297,9 @@ Reliable</string>
         <property name="tickInterval">
          <number>1</number>
         </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>question1Score</string>
+        </property>
        </widget>
       </item>
       <item>
@@ -311,7 +314,7 @@ Reliable</string>
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleGroupBox" name="Q2GroupBox">
+    <widget class="ctkCollapsibleGroupBox" name="q2GroupBox">
      <property name="enabled">
       <bool>false</bool>
      </property>
@@ -344,6 +347,9 @@ Adherence</string>
         <property name="tickInterval">
          <number>1</number>
         </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>question2Score</string>
+        </property>
        </widget>
       </item>
       <item>
@@ -358,7 +364,7 @@ Adherence</string>
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleGroupBox" name="Q4GroupBox">
+    <widget class="ctkCollapsibleGroupBox" name="q3groupBox">
      <property name="enabled">
       <bool>false</bool>
      </property>
@@ -366,53 +372,6 @@ Adherence</string>
       <string>Q3: How effectively can you assess each segment's perfusion volume?</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_9">
-      <item>
-       <widget class="QLabel" name="q4MinLabel">
-        <property name="text">
-         <string>(1) Not
-Effectively</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QSlider" name="q4Slider">
-        <property name="minimum">
-         <number>1</number>
-        </property>
-        <property name="maximum">
-         <number>5</number>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="tickPosition">
-         <enum>QSlider::TicksBelow</enum>
-        </property>
-        <property name="tickInterval">
-         <number>1</number>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="q4MaxLabel">
-        <property name="text">
-         <string>(5) Very
-Effectively</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="ctkCollapsibleGroupBox" name="Q3GroupBox">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-     <property name="title">
-      <string>Q4: How relevant is this segments division towards planning a surgical intervention?</string>
-     </property>
-     <layout class="QHBoxLayout" name="horizontalLayout_10">
       <item>
        <widget class="QLabel" name="q3MinLabel">
         <property name="text">
@@ -438,10 +397,63 @@ Effectively</string>
         <property name="tickInterval">
          <number>1</number>
         </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>question3Score</string>
+        </property>
        </widget>
       </item>
       <item>
        <widget class="QLabel" name="q3MaxLabel">
+        <property name="text">
+         <string>(5) Very
+Effectively</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="ctkCollapsibleGroupBox" name="q4GroupBox">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
+     <property name="title">
+      <string>Q4: How relevant is this segments division towards planning a surgical intervention?</string>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_10">
+      <item>
+       <widget class="QLabel" name="q4MinLabel">
+        <property name="text">
+         <string>(1) Not
+Effectively</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSlider" name="q4Slider">
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <number>5</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="tickPosition">
+         <enum>QSlider::TicksBelow</enum>
+        </property>
+        <property name="tickInterval">
+         <number>1</number>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>question4Score</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="q4MaxLabel">
         <property name="text">
          <string>(5) Very
 Effectively</string>

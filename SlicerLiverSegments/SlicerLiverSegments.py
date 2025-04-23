@@ -36,6 +36,11 @@ class SlicerLiverSegmentsParameterNode:
     orderSeed: Annotated[str, MatchesInteger()] = str(random.randint(0,65535))
     outputFileName: str = ""
     resultsTableNode: vtkMRMLTableNode = None
+    question1Score:  Annotated[int, WithinRange(1,5)] = 1
+    question2Score:  Annotated[int, WithinRange(1,5)] = 1
+    question3Score:  Annotated[int, WithinRange(1,5)] = 1
+    question4Score:  Annotated[int, WithinRange(1,5)] = 1
+    currentMethod: int
 
 #
 # SlicerLiverSegments
@@ -132,11 +137,28 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
                 qt.QFileDialog.getSaveFileName(None, "Output file", ".", "CSV Files (*.csv);; All Files (*)"))
             )
 
+        # Qt event connections
+        self.ui.startExperimentPushButton.clicked.connect(self.startExperiment)
 
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
         self._parameterNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self.enableStartExperimentButtonIfPossible)
+
+
+    def startExperiment(self) -> None:
+
+        if self.logic.initializeExperiment():
+            self.ui.startExperimentPushButton.setEnabled(False)
+            self.ui.directoriesGroupBox.setEnabled(False)
+            self.ui.parametersGroupBox.setEnabled(False)
+            self.ui.q1GroupBox.setEnabled(True)
+            self.ui.q2GroupBox.setEnabled(True)
+            self.ui.q3GroupBox.setEnabled(True)
+            self.ui.q4GroupBox.setEnabled(True)
+            self.logic.startExperiment()
+        else:
+           raise ValueError("Number of files in volume and methods directory must be equal")
 
     def enableStartExperimentButtonIfPossible(self, caller, event) -> None:
         self.ui.startExperimentPushButton.setEnabled(self.logic.canExperimentStart())
@@ -258,6 +280,47 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
 
         self._parameterNode = self.getParameterNode()
 
+    def initializeExperiment(self) -> bool:
+
+        # Store and check dataset files and consistency
+        self._volumeFiles = self.getFilesInDirectory(self._parameterNode.volumesDirectory)
+        self._method1Files = self.getFilesInDirectory(self._parameterNode.method1Directory)
+        self._method2Files = self.getFilesInDirectory(self._parameterNode.method2Directory)
+        self._method3Files = self.getFilesInDirectory(self._parameterNode.method3Directory)
+        self._method4Files = self.getFilesInDirectory(self._parameterNode.method4Directory)
+
+        if (len(self._volumeFiles) != len(self._method1Files) or
+            len(self._volumeFiles) != len(self._method2Files) or
+            len(self._volumeFiles) != len(self._method3Files) or
+            len(self._volumeFiles) != len(self._method4Files)):
+            return False
+
+        self._resultsTable = self._parameterNode.resultsTableNode.GetTable()
+        sequenceNumberColumn = vtk.vtkIntArray()
+        sequenceNumberColumn.SetName("Sequence")
+        methodColumn = vtk.vtkIntArray()
+        methodColumn.SetName("Method")
+        q1ScoringColumn = vtk.vtkIntArray()
+        methodColumn.SetName("Q1 Scoring")
+        q2ScoringColumn = vtk.vtkIntArray()
+        methodColumn.SetName("Q2 Scoring")
+        q3ScoringColumn = vtk.vtkIntArray()
+        methodColumn.SetName("Q3 Scoring")
+        q4ScoringColumn = vtk.vtkIntArray()
+        methodColumn.SetName("Q4 Scoring")
+
+        self._resultsTable.AddColumn(sequenceNumberColumn)
+        self._resultsTable.AddColumn(methodColumn)
+        self._resultsTable.AddColumn(q1ScoringColumn)
+        self._resultsTable.AddColumn(q2ScoringColumn)
+        self._resultsTable.AddColumn(q3ScoringColumn)
+        self._resultsTable.AddColumn(q4ScoringColumn)
+
+        numRows = len(self._volumeFiles) * 4 # Files x methods
+        self._resultsTable.SetNumberOfRows(numRows)
+
+        return True
+
     def getParameterNode(self):
         return SlicerLiverSegmentsParameterNode(super().getParameterNode())
 
@@ -290,18 +353,6 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
 
         # List all files in the directory, filter out any subdirectories, and filter by extension
         return [f for f in os.listdir(dirPath) if os.path.isfile(os.path.join(dirPath, f)) and f.endswith(self.VALID_EXTENSIONS)]
-
-    def getVolumeFiles(self, volumesDirPath: str) -> list:
-        """
-        Returns a list of all files in the volumes directory.
-        """
-        return self.getFilesInDirectory(volumesDirPath)
-
-    def getSegmentationFiles(self, segmentationsDirPath: str) -> list:
-        """
-        Returns a list of all files in the segmentations directory.
-        """
-        return self.getFilesInDirectory(segmentationsDirPath)
 
     def generateRandomLoadingOrder(self, numberOfFiles: int, seed: int = None) -> list:
         """
@@ -341,7 +392,7 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
 
     def startExperiment(self,volumesDirPath, segmentationsDirPath) -> bool:
         """
-        Called upon start experiment button is pressed
+        Called once the datasets are verified, in order to start the experiment
         """
 
         # Store the directory paths as attributes
