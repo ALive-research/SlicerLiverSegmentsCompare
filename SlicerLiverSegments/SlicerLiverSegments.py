@@ -1,4 +1,5 @@
 import logging
+import inspect
 import os
 import re
 import random
@@ -16,6 +17,7 @@ from slicer.parameterNodeWrapper import (
 )
 
 from slicer import vtkMRMLScalarVolumeNode
+from slicer import vtkMRMLTableNode
 
 import qt
 
@@ -26,12 +28,14 @@ class MatchesInteger(Validator):
 
 @parameterNodeWrapper
 class SlicerLiverSegmentsParameterNode:
-    volumesDirectory: str
-    method1Directory: str
-    method2Directory: str
-    method3Directory: str
-    method4Directory: str
+    volumesDirectory: str = ""
+    method1Directory: str = ""
+    method2Directory: str = ""
+    method3Directory: str = ""
+    method4Directory: str = ""
     orderSeed: Annotated[str, MatchesInteger()] = str(random.randint(0,65535))
+    outputFileName: str = ""
+    resultsTableNode: vtkMRMLTableNode = None
 
 #
 # SlicerLiverSegments
@@ -82,10 +86,12 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         """
 
         self.logic = SlicerLiverSegmentsLogic()
+        self._parameterNode = self.logic.getParameterNode()
 
         ScriptedLoadableModuleWidget.setup(self)
 
         uiWidget = slicer.util.loadUI(self.resourcePath("UI/SlicerLiverSegments.ui"))
+        uiWidget.setMRMLScene(slicer.mrmlScene)
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
 
@@ -120,16 +126,20 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
                 qt.QFileDialog.getExistingDirectory(None, "Select Method 4 Segmentations Directory"))
             )
 
-        self.ui.method4DirPushButton.clicked.connect(
+        self.ui.outputFilePushButton.clicked.connect(
             lambda:
-            self.ui.method4DirLineEdit.setText(
-                qt.QFileDialog.getExistingDirectory(None, "Select Method 4 Segmentations Directory"))
+            self.ui.outputFileLineEdit.setText(
+                qt.QFileDialog.getSaveFileName(None, "Output file", ".", "CSV Files (*.csv);; All Files (*)"))
             )
+
 
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
+        self._parameterNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self.enableStartExperimentButtonIfPossible)
 
+    def enableStartExperimentButtonIfPossible(self, caller, event) -> None:
+        self.ui.startExperimentPushButton.setEnabled(self.logic.canExperimentStart())
 
     def initializeParameterNode(self) -> None:
         self._parameterNode =  self.logic.getParameterNode()
@@ -152,7 +162,7 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         """
         Called each time the user opens a different module.
         """
-        self._parameterNode.disconnectGui(self._parameterNodeConnection)
+        self._parameterNode.disconnectGui(self._parameterNodeConnectionTag)
         self._parameterNodeConnectionTag = None
 
 
@@ -246,17 +256,23 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
         # self.volumeFiles = []
         # self.segmentationFiles = []
 
-        parameterNode = self.getParameterNode()
-        parameterNode.orderSeed = str(random.randint(0, 65535))
-
-    def resetExperiment(self) -> None:
-        """
-        Resets the experiment. The current dataset index is reset to the beginning.
-        """
-        self.currentDatasetIndex = 0  # Start from the first dataset
+        self._parameterNode = self.getParameterNode()
 
     def getParameterNode(self):
         return SlicerLiverSegmentsParameterNode(super().getParameterNode())
+
+    def canExperimentStart(self) -> bool:
+        """
+        Returns whether the conditions are met to start the experiment
+        """
+
+        properties = [name for name,value in inspect.getmembers(self._parameterNode.__class__) if isinstance(value,property)]
+
+        for prop_name in properties:
+            prop_value = getattr(self._parameterNode, prop_name)
+            if prop_value is None or prop_value == "":
+                return False
+        return True
 
     def getFilesInDirectory(self, dirPath: str) -> list:
         """
@@ -393,8 +409,6 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
 
         # Load the previous dataset
         self.loadDataset(self.currentDatasetIndex)
-
-
 
 #
 # SlicerLiverSegmentsTest
