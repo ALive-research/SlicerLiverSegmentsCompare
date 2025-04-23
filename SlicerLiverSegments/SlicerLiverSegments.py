@@ -3,6 +3,7 @@ import inspect
 import os
 import re
 import random
+import itertools
 from typing import Annotated, Optional
 
 import vtk
@@ -40,7 +41,8 @@ class SlicerLiverSegmentsParameterNode:
     question2Score:  Annotated[int, WithinRange(1,5)] = 1
     question3Score:  Annotated[int, WithinRange(1,5)] = 1
     question4Score:  Annotated[int, WithinRange(1,5)] = 1
-    currentMethod: int
+    totalEvaluations: int
+    currentEvaluation: int
 
 #
 # SlicerLiverSegments
@@ -139,12 +141,34 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
 
         # Qt event connections
         self.ui.startExperimentPushButton.clicked.connect(self.startExperiment)
+        self.ui.saveAndNextPushButton.clicked.connect(self.onSaveAndNext)
+        self.ui.previousPushButton.clicked.connect(self.onPrevious)
 
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
         self._parameterNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self.enableStartExperimentButtonIfPossible)
 
+    def onSaveAndNext(self) -> None:
+        self.ui.previousPushButton.setEnabled(True)
+        if self.logic.isNextLastDataset():
+            self.ui.saveAndNextPushButton.setEnabled(False)
+        else:
+            self.ui.saveAndNextPushButton.setEnabled(True)
+            self.logic.nextDataset()
+
+        #Update progress
+        self.ui.progressBar.setValue(self._parameterNode.currentEvaluation / self._parameterNode.totalEvaluations * 100)
+
+    def onPrevious(self) -> None:
+        self.ui.saveAndNextPushButton.setEnabled(True)
+        if self.logic.isPreviousFirstDataset():
+            self.ui.previousPushButton.setEnabled(False)
+        else:
+            self.ui.previousPushButton.setEnabled(True)
+            self.logic.previousDataset()
+
+        self.ui.progressBar.setValue(self._parameterNode.currentEvaluation / self._parameterNode.totalEvaluations * 100)
 
     def startExperiment(self) -> None:
 
@@ -156,6 +180,7 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
             self.ui.q2GroupBox.setEnabled(True)
             self.ui.q3GroupBox.setEnabled(True)
             self.ui.q4GroupBox.setEnabled(True)
+            self.ui.saveAndNextPushButton.setEnabled(True)
             self.logic.startExperiment()
         else:
            raise ValueError("Number of files in volume and methods directory must be equal")
@@ -224,32 +249,6 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         else:
             self.startExperimentButton.setEnabled(False)
 
-    def onPrevButton(self) -> None:
-        """
-        Called upon Previous button is pressed.
-        """
-        self.logic.previousDataset()
-
-        # Check if the currentDatasetIndex is at the start to disable the "Previous" button
-        if self.logic.currentDatasetIndex == 0:
-            self.prevButton.setEnabled(False)
-
-        # Ensure the "Next" button is enabled (in case it was disabled after reaching the end)
-        self.nextButton.setEnabled(True)
-
-    def onNextButton(self) -> None:
-        """
-        Called upon Next button is pressed.
-        """
-        self.logic.nextDataset()
-
-        # Check if the currentDatasetIndex is at the end to disable the "Next" button
-        if self.logic.currentDatasetIndex == len(self.logic.loadingOrder) - 1:
-            self.nextButton.setEnabled(False)
-
-        # Ensure the "Previous" button is enabled (in case it was disabled after reaching the start)
-        self.prevButton.setEnabled(True)
-
 #
 # SlicerLiverSegmentsLogic
 #
@@ -266,7 +265,6 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
 
     # Define a tuple of valid file extensions
     VALID_EXTENSIONS = ("nii.gz", ".nii", ".dcm", ".nrrd", ".seg.nrrd" )
-    # RANDOM_SEED= 10
 
     def __init__(self) -> None:
         """
@@ -279,6 +277,13 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
         # self.segmentationFiles = []
 
         self._parameterNode = self.getParameterNode()
+        self._currentMethod = 0
+        self._currentSequence = 0
+        self._currentVolumeFileName = None
+        self._currentSegmentsFileName = None
+        self._currentDatasetIndex = 0
+        self._currentVolumeNode = None
+        self._currentSegmentationNode = None
 
     def initializeExperiment(self) -> bool:
 
@@ -295,22 +300,32 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
             len(self._volumeFiles) != len(self._method4Files)):
             return False
 
+        # Update progress values
+        self._parameterNode.totalEvaluations = len(self._volumeFiles) * 4
+        self._parameterNode.currentEvaluation = 1
+
         self._resultsTable = self._parameterNode.resultsTableNode.GetTable()
         sequenceNumberColumn = vtk.vtkIntArray()
         sequenceNumberColumn.SetName("Sequence")
         methodColumn = vtk.vtkIntArray()
         methodColumn.SetName("Method")
+        volumeFileName = vtk.vtkStringArray()
+        volumeFileName.SetName("Volume File")
+        segmentsFileName = vtk.vtkStringArray()
+        segmentsFileName.SetName("Segmentation File")
         q1ScoringColumn = vtk.vtkIntArray()
-        methodColumn.SetName("Q1 Scoring")
+        q1ScoringColumn.SetName("Q1 Scoring")
         q2ScoringColumn = vtk.vtkIntArray()
-        methodColumn.SetName("Q2 Scoring")
+        q2ScoringColumn.SetName("Q2 Scoring")
         q3ScoringColumn = vtk.vtkIntArray()
-        methodColumn.SetName("Q3 Scoring")
+        q3ScoringColumn.SetName("Q3 Scoring")
         q4ScoringColumn = vtk.vtkIntArray()
-        methodColumn.SetName("Q4 Scoring")
+        q4ScoringColumn.SetName("Q4 Scoring")
 
         self._resultsTable.AddColumn(sequenceNumberColumn)
         self._resultsTable.AddColumn(methodColumn)
+        self._resultsTable.AddColumn(volumeFileName)
+        self._resultsTable.AddColumn(segmentsFileName)
         self._resultsTable.AddColumn(q1ScoringColumn)
         self._resultsTable.AddColumn(q2ScoringColumn)
         self._resultsTable.AddColumn(q3ScoringColumn)
@@ -354,112 +369,107 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
         # List all files in the directory, filter out any subdirectories, and filter by extension
         return [f for f in os.listdir(dirPath) if os.path.isfile(os.path.join(dirPath, f)) and f.endswith(self.VALID_EXTENSIONS)]
 
-    def generateRandomLoadingOrder(self, numberOfFiles: int, seed: int = None) -> list:
-        """
-        Generate a vector of random numbers representing the loading order for files.
-
-        :param numberOfFiles: Number of files for which to generate the loading order.
-        :param seed: Optional seed for random number generation.
-        """
-        if seed is not None:
-            random.seed(seed)
-
-        return random.sample(range(numberOfFiles), numberOfFiles)
-
-    def loadDataset(self, index: int) -> None:
-        """
-        Load a dataset (volume and segmentation) into the scene based on the given index.
-        """
-        if index < 0 or index >= len(self.loadingOrder):
+    def loadDataset(self, index) -> None:
+        if index < 0 or index >= len(self._loadingOrder):
             print(f"Index {index} is out of range!")
             return
 
+        method_idx, sequence_idx = self._loadingOrder[index]
+
         # Load the volume
-        volumePath = os.path.join(self.volumesDirPath, self.volumeFiles[self.loadingOrder[index]])
-        if not slicer.util.loadVolume(volumePath):
-            print(f"Failed to load volume from {volumePath}")
+        volume_filename = self._volumeFiles[sequence_idx]
+        volume_path = os.path.join(self._parameterNode.volumesDirectory, volume_filename)
+        self._currentVolumeNode = slicer.util.loadVolume(volume_path)
+        if not self._currentVolumeNode:
+            print(f"Failed to load volume from {volume_path}")
 
         # Load the segmentation
-        segmentationPath = os.path.join(self.segmentationsDirPath, self.segmentationFiles[self.loadingOrder[index]])
-        segmentationNode = slicer.util.loadSegmentation(segmentationPath)
-        if not segmentationNode:
-            print(f"Failed to load segmentation from {segmentationPath}")
+        segmentationDirectories = [
+            self._parameterNode.method1Directory,
+            self._parameterNode.method2Directory,
+            self._parameterNode.method3Directory,
+            self._parameterNode.method4Directory,
+        ]
+        segmentationFiles = [
+            self._method1Files,
+            self._method2Files,
+            self._method3Files,
+            self._method4Files,
+        ]
+        segmentation_filename = segmentationFiles[method_idx][sequence_idx]
+        segmentation_path = os.path.join(segmentationDirectories[method_idx], segmentation_filename)
+        self._currentSegmentationNode = slicer.util.loadSegmentation(segmentation_path)
+        if not self._currentSegmentationNode:
+            print(f"Failed to load segmentation from {segmentation_path}")
         else:
-            segmentation = segmentationNode.GetSegmentation()
+            self._currentSegmentationNode.CreateClosedSurfaceRepresentation()
 
-            # Convert the entire segmentation to have a closed surface representation
-            segmentationNode.CreateClosedSurfaceRepresentation()
 
-    def startExperiment(self,volumesDirPath, segmentationsDirPath) -> bool:
+    def startExperiment(self) -> None:
         """
         Called once the datasets are verified, in order to start the experiment
         """
 
-        # Store the directory paths as attributes
-        self.volumesDirPath = volumesDirPath
-        self.segmentationsDirPath = segmentationsDirPath
+        # self._currentVolumeFileName = self._volumeFiles[self._currentSequence]
+        # self._currentSegmentsFileName = [method1Files, method2Files, method3Files, method4Files]
 
 
-        # 1. Get the list of files in volumes
-        volumeFiles = self.getVolumeFiles(volumesDirPath)
+        methods = list(range(0, 4))  # Should be 0 to 3 for 4 methods random.shuffle(methods)
+        sequences = list(range(0, len(self._volumeFiles)))  # Include the last file
+        random.shuffle(sequences)
+        self._loadingOrder = list(itertools.product(methods, sequences))
+        random.shuffle(self._loadingOrder)
 
-        # 2. Get the list of files in segmentations
-        segmentationFiles = self.getSegmentationFiles(segmentationsDirPath)
-
-        if len(volumeFiles) != len(segmentationFiles):
-            print("Volumes and segmentations directories do not have the same number of files!")
-            return False
-
-        # Keep track of the files and order for future use
-        self.volumeFiles = volumeFiles
-        self.segmentationFiles = segmentationFiles
-        self.loadingOrder = self.generateRandomLoadingOrder(len(volumeFiles), self.RANDOM_SEED)
-
-        self.resetExperiment()
-
-        print("Volume Files:", volumeFiles)
-        print("Segmentation Files:", segmentationFiles)
-        print("Loading Order:", self.loadingOrder)
-
-        # Clear the scene
-        slicer.mrmlScene.Clear()
 
         # Load the first dataset
-        self.loadDataset(self.currentDatasetIndex)
+        self.loadDataset(self._currentDatasetIndex)
 
         return True
 
+    def isNextLastDataset(self) -> bool:
+        """
+        Returns whether the next dataset will be the last one
+        """
+        if self._currentDatasetIndex + 1 == len(self._loadingOrder):
+            return True
+        else:
+            return False
+
+    def isPreviousFirstDataset(self) -> bool:
+        """
+        Returns whether the previous dataset was teh first one
+        """
+        if self._currentDatasetIndex -1 == 0:
+            return True
+        else:
+            return False
+
+    def cleanScene(self) -> None:
+
+        slicer.mrmlScene.RemoveNode(self._currentVolumeNode)
+        slicer.mrmlScene.RemoveNode(self._currentSegmentationNode)
+
     def nextDataset(self) -> None:
-        """
-        Load the next dataset in the sequence into the scene.
-        """
-        self.currentDatasetIndex += 1
-        if self.currentDatasetIndex >= len(self.loadingOrder):
-            # Handle end of dataset list (maybe loop back to start or just stay on the last dataset)
-            self.currentDatasetIndex = len(self.loadingOrder) - 1
-            return
-
-        # Clear the scene
-        slicer.mrmlScene.Clear()
-
-        # Load the next dataset
-        self.loadDataset(self.currentDatasetIndex)
+        if self._currentDatasetIndex + 1 < len(self._loadingOrder):
+            self._currentDatasetIndex += 1
+            self._parameterNode.currentEvaluation += 1
+            # Clear the scene
+            self.cleanScene()
+            # Load the next dataset
+            self.loadDataset(self._currentDatasetIndex)
+        else:
+            print("No more datasets to load.")
 
     def previousDataset(self) -> None:
-        """
-        Load the previous dataset in the sequence into the scene.
-        """
-        self.currentDatasetIndex -= 1
-        if self.currentDatasetIndex < 0:
-            # Handle start of dataset list (maybe loop back to end or just stay on the first dataset)
-            self.currentDatasetIndex = 0
-            return
-
-        # Clear the scene
-        slicer.mrmlScene.Clear()
-
-        # Load the previous dataset
-        self.loadDataset(self.currentDatasetIndex)
+        if self._currentDatasetIndex > 0:
+            self._currentDatasetIndex -= 1
+            self._parameterNode.currentEvaluation -= 1
+            # Clear the scene
+            self.cleanScene()
+            # Load the previous dataset
+            self.loadDataset(self._currentDatasetIndex)
+        else:
+            print("This is the first dataset.")
 
 #
 # SlicerLiverSegmentsTest
