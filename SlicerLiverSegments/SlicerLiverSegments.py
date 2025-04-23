@@ -24,6 +24,7 @@ class LiverSegmentsCompareParameterNode:
     method2Directory: str
     method3Directory: str
     method4Directory: str
+    randomSeed: str
 
 
 #
@@ -75,17 +76,50 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         """
         ScriptedLoadableModuleWidget.setup(self)
 
-        uWidget = slicer.util.loadUI(self.resourcePath("UI/SlicerLiverSegments.ui"))
+        uiWidget = slicer.util.loadUI(self.resourcePath("UI/SlicerLiverSegments.ui"))
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
+
+        # Create logic class. Logic implements all computations that should be possible to run
+        # in batch mode, without a graphical user interface.
+        self.logic = SlicerLiverSegmentsLogic()
+
+
+        # Manage directory selection
+        self.ui.volumesDirPushButton.clicked.connect(
+            lambda:
+            self.ui.volumesDirLineEdit.setText(
+                qt.QFileDialog.getExistingDirectory(None, "Select Volumes Directory"))
+            )
+
+        self.ui.method1DirPushButton.clicked.connect(
+            lambda:
+            self.ui.method1DirLineEdit.setText(
+                qt.QFileDialog.getExistingDirectory(None, "Select Method 1 Segmentations Directory"))
+            )
+
+        self.ui.method2DirPushButton.clicked.connect(
+            lambda:
+            self.ui.method2DirLineEdit.setText(
+                qt.QFileDialog.getExistingDirectory(None, "Select Method 2 Segmentations Directory"))
+            )
+
+        self.ui.method3DirPushButton.clicked.connect(
+            lambda:
+            self.ui.method3DirLineEdit.setText(
+                qt.QFileDialog.getExistingDirectory(None, "Select Method 3 Segmentations Directory"))
+            )
+
+        self.ui.method4DirPushButton.clicked.connect(
+            lambda:
+            self.ui.method4DirLineEdit.setText(
+                qt.QFileDialog.getExistingDirectory(None, "Select Method 4 Segmentations Directory"))
+            )
 
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
 
-        # Create logic class. Logic implements all computations that should be possible to run
-        # in batch mode, without a graphical user interface.
-        self.logic = SlicerLiverSegmentsLogic()
 
     def cleanup(self) -> None:
         """
