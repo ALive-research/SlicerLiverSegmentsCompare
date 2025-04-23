@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import random
 from typing import Annotated, Optional
 
@@ -11,21 +12,26 @@ from slicer.util import VTKObservationMixin
 from slicer.parameterNodeWrapper import (
     parameterNodeWrapper,
     WithinRange,
+    Validator
 )
 
 from slicer import vtkMRMLScalarVolumeNode
 
 import qt
 
+class MatchesInteger(Validator):
+   def validate(self, value):
+      if re.match("[0-9]+", value) is None:
+          raise ValueError("Did not match integer value")
+
 @parameterNodeWrapper
-class LiverSegmentsCompareParameterNode:
+class SlicerLiverSegmentsParameterNode:
     volumesDirectory: str
     method1Directory: str
     method2Directory: str
     method3Directory: str
     method4Directory: str
-    randomSeed: str
-
+    orderSeed: Annotated[str, MatchesInteger()] = str(random.randint(0,65535))
 
 #
 # SlicerLiverSegments
@@ -74,16 +80,14 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         """
         Called when the user opens the module the first time and the widget is initialized.
         """
+
+        self.logic = SlicerLiverSegmentsLogic()
+
         ScriptedLoadableModuleWidget.setup(self)
 
         uiWidget = slicer.util.loadUI(self.resourcePath("UI/SlicerLiverSegments.ui"))
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
-
-        # Create logic class. Logic implements all computations that should be possible to run
-        # in batch mode, without a graphical user interface.
-        self.logic = SlicerLiverSegmentsLogic()
-
 
         # Manage directory selection
         self.ui.volumesDirPushButton.clicked.connect(
@@ -116,10 +120,19 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
                 qt.QFileDialog.getExistingDirectory(None, "Select Method 4 Segmentations Directory"))
             )
 
+        self.ui.method4DirPushButton.clicked.connect(
+            lambda:
+            self.ui.method4DirLineEdit.setText(
+                qt.QFileDialog.getExistingDirectory(None, "Select Method 4 Segmentations Directory"))
+            )
+
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
 
+
+    def initializeParameterNode(self) -> None:
+        self._parameterNode =  self.logic.getParameterNode()
 
     def cleanup(self) -> None:
         """
@@ -127,17 +140,21 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         """
         self.removeObservers()
 
+
     def enter(self) -> None:
         """
         Called each time the user opens this module.
         """
-        pass
+        self.initializeParameterNode()
+        self._parameterNodeConnectionTag = self._parameterNode.connectGui(self.ui)
 
     def exit(self) -> None:
         """
         Called each time the user opens a different module.
         """
-        pass
+        self._parameterNode.disconnectGui(self._parameterNodeConnection)
+        self._parameterNodeConnectionTag = None
+
 
     def onSceneStartClose(self, caller, event) -> None:
         """
@@ -217,17 +234,20 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
 
     # Define a tuple of valid file extensions
     VALID_EXTENSIONS = ("nii.gz", ".nii", ".dcm", ".nrrd", ".seg.nrrd" )
-    RANDOM_SEED= 10
+    # RANDOM_SEED= 10
 
     def __init__(self) -> None:
         """
         Called when the logic class is instantiated. Can be used for initializing member variables.
         """
         ScriptedLoadableModuleLogic.__init__(self)
-        self.currentDatasetIndex = -1  # Initializing with -1 to denote no dataset loaded
-        self.loadingOrder = []
-        self.volumeFiles = []
-        self.segmentationFiles = []
+        # self.currentDatasetIndex = -1  # Initializing with -1 to denote no dataset loaded
+        # self.loadingOrder = []
+        # self.volumeFiles = []
+        # self.segmentationFiles = []
+
+        parameterNode = self.getParameterNode()
+        parameterNode.orderSeed = str(random.randint(0, 65535))
 
     def resetExperiment(self) -> None:
         """
