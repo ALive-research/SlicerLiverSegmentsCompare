@@ -17,6 +17,15 @@ from slicer import vtkMRMLScalarVolumeNode
 
 import qt
 
+@parameterNodeWrapper
+class LiverSegmentsCompareParameterNode:
+    volumesDirectory: str
+    method1Directory: str
+    method2Directory: str
+    method3Directory: str
+    method4Directory: str
+
+
 #
 # SlicerLiverSegments
 #
@@ -66,59 +75,9 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         """
         ScriptedLoadableModuleWidget.setup(self)
 
-        # Create the Setup GroupBox
-        setupGroupBox = qt.QGroupBox("Setup")
-        setupGroupBoxLayout = qt.QVBoxLayout()
-
-        # Volumes folder selection
-        folderVolumesHBoxLayout = qt.QHBoxLayout()
-        self.selectFolderButtonVolumes = qt.QPushButton("Select Volumes Folder")
-        self.folderPathLineEditVolumes = qt.QLineEdit()
-        folderVolumesHBoxLayout.addWidget(self.selectFolderButtonVolumes)
-        folderVolumesHBoxLayout.addWidget(self.folderPathLineEditVolumes)
-        setupGroupBoxLayout.addLayout(folderVolumesHBoxLayout)
-
-        # Segmentations folder selection
-        folderSegmentationsHBoxLayout = qt.QHBoxLayout()
-        self.selectFolderButtonSegmentations = qt.QPushButton("Select Segmentations Folder")
-        self.folderPathLineEditSegmentations = qt.QLineEdit()
-        folderSegmentationsHBoxLayout.addWidget(self.selectFolderButtonSegmentations)
-        folderSegmentationsHBoxLayout.addWidget(self.folderPathLineEditSegmentations)
-        setupGroupBoxLayout.addLayout(folderSegmentationsHBoxLayout)
-
-        # Start Experiment Button
-        self.startExperimentButton = qt.QPushButton("Start Experiment")
-        self.startExperimentButton.setEnabled(False)  # Initially disabled
-        setupGroupBoxLayout.addWidget(self.startExperimentButton)
-
-        # Create navigation buttons
-        navigationButtonLayout = qt.QHBoxLayout()
-
-        self.prevButton = qt.QPushButton("Previous")
-        self.prevButton.setEnabled(False)
-        self.nextButton = qt.QPushButton("Next")
-        self.nextButton.setEnabled(False)
-
-        navigationButtonLayout.addWidget(self.prevButton)
-        navigationButtonLayout.addWidget(self.nextButton)
-
-        # Connections for the navigation buttons
-        self.prevButton.clicked.connect(self.onPrevButton)
-        self.nextButton.clicked.connect(self.onNextButton)
-
-
-        setupGroupBox.setLayout(setupGroupBoxLayout)
-        self.layout.addWidget(setupGroupBox)
-        self.layout.addItem(qt.QSpacerItem(0, 0, qt.QSizePolicy.Minimum, qt.QSizePolicy.Expanding))
-        self.layout.addLayout(navigationButtonLayout)
-        self.layout.addItem(qt.QSpacerItem(0, 0, qt.QSizePolicy.Minimum, qt.QSizePolicy.Expanding))
-
-        # Connections (qt.Qt)
-        self.selectFolderButtonVolumes.clicked.connect(lambda: self.selectFolder(self.folderPathLineEditVolumes))
-        self.selectFolderButtonSegmentations.clicked.connect(lambda: self.selectFolder(self.folderPathLineEditSegmentations))
-        self.startExperimentButton.clicked.connect(self.onStartExperimentButton)
-
-        # Connections (VTK)
+        uWidget = slicer.util.loadUI(self.resourcePath("UI/SlicerLiverSegments.ui"))
+        self.layout.addWidget(uiWidget)
+        self.ui = slicer.util.childWidgetVariables(uiWidget)
 
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
