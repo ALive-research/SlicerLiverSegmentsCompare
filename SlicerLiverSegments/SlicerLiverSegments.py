@@ -150,6 +150,8 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         self._parameterNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self.enableStartExperimentButtonIfPossible)
 
     def onSaveAndNext(self) -> None:
+        # Save current data before proceeding
+        self.logic.saveCurrentDataToTable()
 
         reply = qt.QMessageBox.question(
             self.parent,
@@ -342,6 +344,19 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
         numRows = len(self._volumeFiles) * 4 # Files x methods
         self._resultsTable.SetNumberOfRows(numRows)
 
+        # Initialize table data (-1 for integers, "N/A" for strings)
+        for colIndex in range(self._resultsTable.GetNumberOfColumns()):
+            column = self._resultsTable.GetColumn(colIndex)
+            columnType = column.GetDataType()
+            if columnType in [vtk.VTK_INT, vtk.VTK_UNSIGNED_INT, vtk.VTK_LONG, vtk.VTK_UNSIGNED_LONG, vtk.VTK_SHORT, vtk.VTK_UNSIGNED_SHORT, vtk.VTK_CHAR, vtk.VTK_UNSIGNED_CHAR]:
+                # Integer types
+                for rowIndex in range(numRows):
+                    column.SetValue(rowIndex, -1)
+            elif columnType == vtk.VTK_STRING:
+                # String type
+                for rowIndex in range(numRows):
+                    column.SetValue(rowIndex, "N/A")
+
         return True
 
     def getParameterNode(self):
@@ -373,9 +388,6 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
         return sorted([f for f in os.listdir(dirPath)
                        if os.path.isfile(os.path.join(dirPath, f))
                        and f.endswith(self.VALID_EXTENSIONS)])
-
-        # List all files in the directory, filter out any subdirectories, and filter by extension
-        return [f for f in os.listdir(dirPath) if os.path.isfile(os.path.join(dirPath, f)) and f.endswith(self.VALID_EXTENSIONS)]
 
     def loadDataset(self, index) -> None:
         if index < 0 or index >= len(self._loadingOrder):
@@ -416,6 +428,9 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
             else:
                 self._currentSegmentationNode.CreateClosedSurfaceRepresentation()
 
+            # Load existing data if available
+            self.loadDataFromTable()
+
         finally:
             # Restore the cursor
             qt.QApplication.restoreOverrideCursor()
@@ -431,16 +446,11 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
         Called once the datasets are verified, in order to start the experiment
         """
 
-        # self._currentVolumeFileName = self._volumeFiles[self._currentSequence]
-        # self._currentSegmentsFileName = [method1Files, method2Files, method3Files, method4Files]
-
-
         methods = list(range(0, 4))  # Should be 0 to 3 for 4 methods random.shuffle(methods)
         sequences = list(range(0, len(self._volumeFiles)))  # Include the last file
         random.shuffle(sequences)
         self._loadingOrder = list(itertools.product(methods, sequences))
         random.shuffle(self._loadingOrder)
-
 
         # Load the first dataset
         self.loadDataset(self._currentDatasetIndex)
@@ -458,7 +468,7 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
 
     def isPreviousFirstDataset(self) -> bool:
         """
-        Returns whether the previous dataset was teh first one
+        Returns whether the previous dataset was the first one
         """
         if self._currentDatasetIndex -1 == 0:
             return True
@@ -491,6 +501,75 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
             self.loadDataset(self._currentDatasetIndex)
         else:
             print("This is the first dataset.")
+
+    def saveCurrentDataToTable(self) -> None:
+        currentRowIndex = self._currentDatasetIndex
+        method_idx, sequence_idx = self._loadingOrder[self._currentDatasetIndex]
+
+        # Get data to save
+        sequenceNumber = sequence_idx
+        methodNumber = method_idx
+        volumeFileName = self._volumeFiles[sequence_idx]
+        segmentationDirectories = [
+            self._parameterNode.method1Directory,
+            self._parameterNode.method2Directory,
+            self._parameterNode.method3Directory,
+            self._parameterNode.method4Directory,
+        ]
+        segmentationFiles = [
+            self._method1Files,
+            self._method2Files,
+            self._method3Files,
+            self._method4Files,
+        ]
+        segmentationFileName = segmentationFiles[method_idx][sequence_idx]
+
+        q1Score = self._parameterNode.question1Score
+        q2Score = self._parameterNode.question2Score
+        q3Score = self._parameterNode.question3Score
+        q4Score = self._parameterNode.question4Score
+
+        # Save values to the table
+        self._resultsTable.GetColumnByName("Sequence").SetValue(currentRowIndex, sequenceNumber)
+        self._resultsTable.GetColumnByName("Method").SetValue(currentRowIndex, methodNumber)
+        self._resultsTable.GetColumnByName("Volume File").SetValue(currentRowIndex, volumeFileName)
+        self._resultsTable.GetColumnByName("Segmentation File").SetValue(currentRowIndex, segmentationFileName)
+        self._resultsTable.GetColumnByName("Q1 Scoring").SetValue(currentRowIndex, q1Score)
+        self._resultsTable.GetColumnByName("Q2 Scoring").SetValue(currentRowIndex, q2Score)
+        self._resultsTable.GetColumnByName("Q3 Scoring").SetValue(currentRowIndex, q3Score)
+        self._resultsTable.GetColumnByName("Q4 Scoring").SetValue(currentRowIndex, q4Score)
+
+        # Save the table to the CSV file
+        fileName = self._parameterNode.outputFileName
+        slicer.util.saveNode(self._parameterNode.resultsTableNode, fileName)
+
+    def loadDataFromTable(self):
+        currentRowIndex = self._currentDatasetIndex
+
+        def safeInt(value):
+            try:
+                return int(value)
+            except ValueError:
+                return -1
+
+        q1Score = safeInt(self._resultsTable.GetColumnByName("Q1 Scoring").GetValue(currentRowIndex))
+        q2Score = safeInt(self._resultsTable.GetColumnByName("Q2 Scoring").GetValue(currentRowIndex))
+        q3Score = safeInt(self._resultsTable.GetColumnByName("Q3 Scoring").GetValue(currentRowIndex))
+        q4Score = safeInt(self._resultsTable.GetColumnByName("Q4 Scoring").GetValue(currentRowIndex))
+
+        if q1Score == -1:
+            # No data saved previously
+            # Set default scores in parameter node
+            self._parameterNode.question1Score = 1
+            self._parameterNode.question2Score = 1
+            self._parameterNode.question3Score = 1
+            self._parameterNode.question4Score = 1
+        else:
+            # Data was saved, update parameter node
+            self._parameterNode.question1Score = q1Score
+            self._parameterNode.question2Score = q2Score
+            self._parameterNode.question3Score = q3Score
+            self._parameterNode.question4Score = q4Score
 
 #
 # SlicerLiverSegmentsTest
