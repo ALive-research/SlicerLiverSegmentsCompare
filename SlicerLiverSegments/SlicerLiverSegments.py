@@ -150,12 +150,20 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         self._parameterNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self.enableStartExperimentButtonIfPossible)
 
     def onSaveAndNext(self) -> None:
-        self.ui.previousPushButton.setEnabled(True)
-        if self.logic.isNextLastDataset():
-            self.ui.saveAndNextPushButton.setEnabled(False)
-        else:
-            self.ui.saveAndNextPushButton.setEnabled(True)
-            self.logic.nextDataset()
+
+        reply = qt.QMessageBox.question(
+            self.parent,
+            'Confirmation',
+            'Are you sure you want to proceed to the next dataset?',
+            qt.QMessageBox.Yes | qt.QMessageBox.No
+        )
+        if reply == qt.QMessageBox.Yes:
+            self.ui.previousPushButton.setEnabled(True)
+            if self.logic.isNextLastDataset():
+                self.ui.saveAndNextPushButton.setEnabled(False)
+            else:
+                self.ui.saveAndNextPushButton.setEnabled(True)
+                self.logic.nextDataset()
 
         #Update progress
         self.ui.progressBar.setValue(self._parameterNode.currentEvaluation / self._parameterNode.totalEvaluations * 100)
@@ -374,36 +382,43 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
             print(f"Index {index} is out of range!")
             return
 
-        method_idx, sequence_idx = self._loadingOrder[index]
+        try:
+            # Change cursor to busy indicator
+            qt.QApplication.setOverrideCursor(qt.Qt.WaitCursor)
 
-        # Load the volume
-        volume_filename = self._volumeFiles[sequence_idx]
-        volume_path = os.path.join(self._parameterNode.volumesDirectory, volume_filename)
-        self._currentVolumeNode = slicer.util.loadVolume(volume_path)
-        if not self._currentVolumeNode:
-            print(f"Failed to load volume from {volume_path}")
+            method_idx, sequence_idx = self._loadingOrder[index]
 
-        # Load the segmentation
-        segmentationDirectories = [
-            self._parameterNode.method1Directory,
-            self._parameterNode.method2Directory,
-            self._parameterNode.method3Directory,
-            self._parameterNode.method4Directory,
-        ]
-        segmentationFiles = [
-            self._method1Files,
-            self._method2Files,
-            self._method3Files,
-            self._method4Files,
-        ]
-        segmentation_filename = segmentationFiles[method_idx][sequence_idx]
-        segmentation_path = os.path.join(segmentationDirectories[method_idx], segmentation_filename)
-        self._currentSegmentationNode = slicer.util.loadSegmentation(segmentation_path)
-        if not self._currentSegmentationNode:
-            print(f"Failed to load segmentation from {segmentation_path}")
-        else:
-            self._currentSegmentationNode.CreateClosedSurfaceRepresentation()
+            # Load the volume
+            volume_filename = self._volumeFiles[sequence_idx]
+            volume_path = os.path.join(self._parameterNode.volumesDirectory, volume_filename)
+            self._currentVolumeNode = slicer.util.loadVolume(volume_path)
+            if not self._currentVolumeNode:
+                print(f"Failed to load volume from {volume_path}")
 
+            # Load the segmentation
+            segmentationDirectories = [
+                self._parameterNode.method1Directory,
+                self._parameterNode.method2Directory,
+                self._parameterNode.method3Directory,
+                self._parameterNode.method4Directory,
+            ]
+            segmentationFiles = [
+                self._method1Files,
+                self._method2Files,
+                self._method3Files,
+                self._method4Files,
+            ]
+            segmentation_filename = segmentationFiles[method_idx][sequence_idx]
+            segmentation_path = os.path.join(segmentationDirectories[method_idx], segmentation_filename)
+            self._currentSegmentationNode = slicer.util.loadSegmentation(segmentation_path)
+            if not self._currentSegmentationNode:
+                print(f"Failed to load segmentation from {segmentation_path}")
+            else:
+                self._currentSegmentationNode.CreateClosedSurfaceRepresentation()
+
+        finally:
+            # Restore the cursor
+            qt.QApplication.restoreOverrideCursor()
 
     def startExperiment(self) -> None:
         """
