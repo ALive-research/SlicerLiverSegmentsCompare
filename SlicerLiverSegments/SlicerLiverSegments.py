@@ -420,6 +420,12 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
             # Restore the cursor
             qt.QApplication.restoreOverrideCursor()
 
+            # Reset the 3D view to center on the loaded data
+            layoutManager = slicer.app.layoutManager()
+            threeDView = layoutManager.threeDWidget(0).threeDView()
+            threeDView.resetFocalPoint()
+            threeDView.renderWindow().Render()
+
     def startExperiment(self) -> None:
         """
         Called once the datasets are verified, in order to start the experiment
