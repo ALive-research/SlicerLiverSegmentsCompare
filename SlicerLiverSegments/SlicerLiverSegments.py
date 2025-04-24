@@ -170,15 +170,19 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         #Update progress
         self.ui.progressBar.setValue(self._parameterNode.currentEvaluation / self._parameterNode.totalEvaluations * 100)
 
+
     def onPrevious(self) -> None:
         self.ui.saveAndNextPushButton.setEnabled(True)
+        if not self.logic.isPreviousFirstDataset():
+            self.logic.previousDataset()
+        # After moving back, check if we've reached the first dataset
         if self.logic.isPreviousFirstDataset():
             self.ui.previousPushButton.setEnabled(False)
         else:
             self.ui.previousPushButton.setEnabled(True)
-            self.logic.previousDataset()
 
         self.ui.progressBar.setValue(self._parameterNode.currentEvaluation / self._parameterNode.totalEvaluations * 100)
+
 
     def startExperiment(self) -> None:
 
@@ -470,7 +474,7 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
         """
         Returns whether the previous dataset was the first one
         """
-        if self._currentDatasetIndex -1 == 0:
+        if self._currentDatasetIndex == 0:
             return True
         else:
             return False
@@ -491,6 +495,7 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
         else:
             print("No more datasets to load.")
 
+
     def previousDataset(self) -> None:
         if self._currentDatasetIndex > 0:
             self._currentDatasetIndex -= 1
@@ -501,6 +506,7 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
             self.loadDataset(self._currentDatasetIndex)
         else:
             print("This is the first dataset.")
+
 
     def saveCurrentDataToTable(self) -> None:
         currentRowIndex = self._currentDatasetIndex
@@ -538,6 +544,8 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
         self._resultsTable.GetColumnByName("Q2 Scoring").SetValue(currentRowIndex, q2Score)
         self._resultsTable.GetColumnByName("Q3 Scoring").SetValue(currentRowIndex, q3Score)
         self._resultsTable.GetColumnByName("Q4 Scoring").SetValue(currentRowIndex, q4Score)
+
+        self._resultsTable.Modified()
 
         # Save the table to the CSV file
         fileName = self._parameterNode.outputFileName
