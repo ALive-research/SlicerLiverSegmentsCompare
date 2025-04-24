@@ -143,46 +143,141 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
         self.ui.startExperimentPushButton.clicked.connect(self.startExperiment)
         self.ui.saveAndNextPushButton.clicked.connect(self.onSaveAndNext)
         self.ui.previousPushButton.clicked.connect(self.onPrevious)
+        self.ui.firstPushButton.clicked.connect(self.onFirst)
+        self.ui.lastPushButton.clicked.connect(self.onLast)
+        self.ui.orderSeedPushButton.clicked.connect(self.onGenerateNewOrderSeed)
 
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
         self._parameterNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self.enableStartExperimentButtonIfPossible)
 
-    def onSaveAndNext(self) -> None:
+
+    def onGenerateNewOrderSeed(self) -> None:
+        # Generate a new random seed
+        new_seed = str(random.randint(0, 65535))
+        # Update the parameter node
+        self._parameterNode.orderSeed = new_seed
+        # Update the UI
+        self.ui.orderSeedLineEdit.setText(new_seed)
+
+    def onFirst(self) -> None:
         # Save current data before proceeding
         self.logic.saveCurrentDataToTable()
 
         reply = qt.QMessageBox.question(
             self.parent,
             'Confirmation',
-            'Are you sure you want to proceed to the next dataset?',
+            'Are you sure you want to go to the first dataset?',
             qt.QMessageBox.Yes | qt.QMessageBox.No
         )
         if reply == qt.QMessageBox.Yes:
-            self.ui.previousPushButton.setEnabled(True)
-            if self.logic.isNextLastDataset():
-                self.ui.saveAndNextPushButton.setEnabled(False)
+            self.logic.firstDataset()
+            # Update button states
+            self.ui.firstPushButton.setEnabled(False)
+            self.ui.previousPushButton.setEnabled(False)
+            self.ui.lastPushButton.setEnabled(True)
+            self.ui.saveAndNextPushButton.setEnabled(True)
+            if self.logic.isLastDataset():
+                self.ui.saveAndNextPushButton.setText("Save")
             else:
-                self.ui.saveAndNextPushButton.setEnabled(True)
+                self.ui.saveAndNextPushButton.setText("Save and Next")
+            # Update progress bar
+            self.ui.progressBar.setValue(
+                self._parameterNode.currentEvaluation /
+                self._parameterNode.totalEvaluations * 100
+            )
+
+    def onLast(self) -> None:
+        # Save current data before proceeding
+        self.logic.saveCurrentDataToTable()
+
+        reply = qt.QMessageBox.question(
+            self.parent,
+            'Confirmation',
+            'Are you sure you want to go to the last dataset?',
+            qt.QMessageBox.Yes | qt.QMessageBox.No
+        )
+        if reply == qt.QMessageBox.Yes:
+            self.logic.lastDataset()
+            # Update button states
+            self.ui.firstPushButton.setEnabled(True)
+            self.ui.previousPushButton.setEnabled(True)
+            self.ui.lastPushButton.setEnabled(False)
+            self.ui.saveAndNextPushButton.setEnabled(True)
+            self.ui.saveAndNextPushButton.setText("Save")
+            # Update progress bar
+            self.ui.progressBar.setValue(
+                self._parameterNode.currentEvaluation /
+                self._parameterNode.totalEvaluations * 100
+            )
+
+
+    def onSaveAndNext(self) -> None:
+        # Save current data
+        self.logic.saveCurrentDataToTable()
+
+        if not self.logic.isLastDataset():
+            reply = qt.QMessageBox.question(
+                self.parent,
+                'Confirmation',
+                'Are you sure you want to proceed to the next dataset?',
+                qt.QMessageBox.Yes | qt.QMessageBox.No
+            )
+            if reply == qt.QMessageBox.Yes:
                 self.logic.nextDataset()
+                self.ui.previousPushButton.setEnabled(True)
+                self.ui.firstPushButton.setEnabled(True)
 
-        #Update progress
-        self.ui.progressBar.setValue(self._parameterNode.currentEvaluation / self._parameterNode.totalEvaluations * 100)
+                # Update button text and states
+                if self.logic.isLastDataset():
+                    self.ui.saveAndNextPushButton.setText("Save")
+                    self.ui.lastPushButton.setEnabled(False)
+                else:
+                    self.ui.saveAndNextPushButton.setText("Save and Next")
+                    self.ui.lastPushButton.setEnabled(True)
+        else:
+            # We are on the last dataset
+            # Inform the user that they've reached the end
+            qt.QMessageBox.information(
+                self.parent,
+                'Information',
+                'You are on the last dataset. Your responses have been saved. You can navigate back to review or modify your responses.'
+            )
+            # Keep navigation buttons enabled
+            self.ui.saveAndNextPushButton.setText("Save")
+            self.ui.saveAndNextPushButton.setEnabled(True)
+            self.ui.lastPushButton.setEnabled(False)
+            self.ui.previousPushButton.setEnabled(True)
+            self.ui.firstPushButton.setEnabled(True)
 
+        # Update progress
+        self.ui.progressBar.setValue(
+            self._parameterNode.currentEvaluation /
+            self._parameterNode.totalEvaluations * 100
+        )
 
     def onPrevious(self) -> None:
         self.ui.saveAndNextPushButton.setEnabled(True)
-        if not self.logic.isPreviousFirstDataset():
-            self.logic.previousDataset()
-        # After moving back, check if we've reached the first dataset
+        self.logic.previousDataset()
+        # Adjust button text if not on last dataset
+        if self.logic.isLastDataset():
+            self.ui.saveAndNextPushButton.setText("Save")
+            self.ui.lastPushButton.setEnabled(False)
+        else:
+            self.ui.saveAndNextPushButton.setText("Save and Next")
+            self.ui.lastPushButton.setEnabled(True)
         if self.logic.isPreviousFirstDataset():
             self.ui.previousPushButton.setEnabled(False)
+            self.ui.firstPushButton.setEnabled(False)
         else:
             self.ui.previousPushButton.setEnabled(True)
-
-        self.ui.progressBar.setValue(self._parameterNode.currentEvaluation / self._parameterNode.totalEvaluations * 100)
-
+            self.ui.firstPushButton.setEnabled(True)
+        # Update progress bar
+        self.ui.progressBar.setValue(
+            self._parameterNode.currentEvaluation /
+            self._parameterNode.totalEvaluations * 100
+        )
 
     def startExperiment(self) -> None:
 
@@ -195,6 +290,7 @@ class SlicerLiverSegmentsWidget(ScriptedLoadableModuleWidget, VTKObservationMixi
             self.ui.q3GroupBox.setEnabled(True)
             self.ui.q4GroupBox.setEnabled(True)
             self.ui.saveAndNextPushButton.setEnabled(True)
+            self.ui.lastPushButton.setEnabled(True)
             self.logic.startExperiment()
         else:
            raise ValueError("Number of files in volume and methods directory must be equal")
@@ -445,21 +541,31 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
             threeDView.resetFocalPoint()
             threeDView.renderWindow().Render()
 
+
     def startExperiment(self) -> None:
         """
-        Called once the datasets are verified, in order to start the experiment
+        Called once the datasets are verified, to start the experiment
         """
+        # Set the random seed from the parameter node
+        random_seed = int(self._parameterNode.orderSeed)
+        random.seed(random_seed)
 
-        methods = list(range(0, 4))  # Should be 0 to 3 for 4 methods random.shuffle(methods)
-        sequences = list(range(0, len(self._volumeFiles)))  # Include the last file
+        # Prepare methods and sequences
+        methods = list(range(0, 4))  # Methods from 0 to 3
+        sequences = list(range(0, len(self._volumeFiles)))  # Sequence indices
         random.shuffle(sequences)
+
+        # Create the loading order and shuffle it
         self._loadingOrder = list(itertools.product(methods, sequences))
         random.shuffle(self._loadingOrder)
 
         # Load the first dataset
         self.loadDataset(self._currentDatasetIndex)
 
-        return True
+
+    def isLastDataset(self) -> bool:
+        return self._currentDatasetIndex == len(self._loadingOrder) - 1
+
 
     def isNextLastDataset(self) -> bool:
         """
@@ -483,6 +589,19 @@ class SlicerLiverSegmentsLogic(ScriptedLoadableModuleLogic):
 
         slicer.mrmlScene.RemoveNode(self._currentVolumeNode)
         slicer.mrmlScene.RemoveNode(self._currentSegmentationNode)
+
+
+    def firstDataset(self) -> None:
+        self.cleanScene()
+        self._currentDatasetIndex = 0
+        self._parameterNode.currentEvaluation = 1
+        self.loadDataset(self._currentDatasetIndex)
+
+    def lastDataset(self) -> None:
+        self.cleanScene()
+        self._currentDatasetIndex = len(self._loadingOrder) - 1
+        self._parameterNode.currentEvaluation = self._parameterNode.totalEvaluations
+        self.loadDataset(self._currentDatasetIndex)
 
     def nextDataset(self) -> None:
         if self._currentDatasetIndex + 1 < len(self._loadingOrder):
