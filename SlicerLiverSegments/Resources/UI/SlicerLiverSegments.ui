@@ -472,6 +472,16 @@ Effectively</string>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_12">
      <item>
+      <widget class="QPushButton" name="firstPushButton">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>&lt;&lt; First</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="previousPushButton">
        <property name="enabled">
         <bool>false</bool>
@@ -501,6 +511,16 @@ Effectively</string>
        </property>
        <property name="text">
         <string>Save and Next &gt;</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="lastPushButton">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Last &gt;&gt;</string>
        </property>
       </widget>
      </item>
